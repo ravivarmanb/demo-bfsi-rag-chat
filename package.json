@@ -1,0 +1,16 @@
+{
+  "name": "rag-chat-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd my-app && npm run dev",
+    "dev:api": "python dev.py",
+    "build": "cd my-app && npm install && npm run build",
+    "start": "cd my-app && npm start",
+    "lint": "cd my-app && npm run lint",
+    "install:api": "pip install -r api/requirements.txt"
+  },
+  "dependencies": {
+    "lucide-react": "^0.559.0"
+  }
+}

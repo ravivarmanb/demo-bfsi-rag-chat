@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat with Gemini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        .message {
+            max-width: 80%;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            line-height: 1.5;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #f3f4f6;
+            margin-right: auto;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .source-badge {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+            text-align: right;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">RAG Chat with Gemini</h1>
+            <p class="text-gray-600">Ask me anything. I'll first check local knowledge, then general knowledge.</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div id="chat-messages" class="chat-container mb-6 space-y-4">
+                <div class="message bot-message">
+                    Hello! I'm your RAG-powered assistant. How can I help you today?
+                </div>
+            </div>
+
+            <div class="flex space-x-2">
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    placeholder="Type your message here..." 
+                    class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onkeypress="if(event.key === 'Enter') sendMessage()"
+                >
+                <button 
+                    onclick="sendMessage()" 
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors flex items-center"
+                    id="send-button"
+                >
+                    <i class="fas fa-paper-plane mr-2"></i> Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        
+        let chatHistory = [];
+
+        function addMessage(message, isUser = false, source = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            messageDiv.textContent = message;
+            
+            if (!isUser && source) {
+                const sourceBadge = document.createElement('div');
+                sourceBadge.className = 'source-badge';
+                sourceBadge.textContent = `Source: ${source === 'local_knowledge' ? 'Local Knowledge' : 'General Knowledge'}`;
+                messageDiv.appendChild(sourceBadge);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage(message, true);
+            userInput.value = '';
+            
+            // Disable input and button while waiting for response
+            userInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Thinking...';
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        history: chatHistory
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                
+                const data = await response.json();
+                addMessage(data.response, false, data.source);
+                
+                // Update chat history
+                chatHistory.push({ role: 'user', content: message });
+                chatHistory.push({ role: 'assistant', content: data.response });
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage("Sorry, I encountered an error. Please try again.", false);
+            } finally {
+                // Re-enable input and button
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                sendButton.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Send';
+                userInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>
