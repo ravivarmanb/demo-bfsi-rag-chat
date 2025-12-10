@@ -1,28 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "my-app/package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/my-app/$1"
-    }
-  ],
+  "buildCommand": "cd my-app && npm install && npm run build",
+  "outputDirectory": "my-app/.next",
+  "installCommand": "cd my-app && npm install",
   "functions": {
     "api/index.py": {
-      "maxDuration": 30
+      "runtime": "python3.9"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
 }
