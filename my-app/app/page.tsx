@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, X, Loader2, Menu, X as CloseIcon } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Menu } from 'lucide-react';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -24,21 +24,22 @@ const API_BASE_URL = process.env.NODE_ENV === 'development'
   ? 'http://127.0.0.1:8000/api' 
   : '/api';
 
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
+// Utility functions (currently unused but kept for future use)
+// const formatFileSize = (bytes: number): string => {
+//   if (bytes === 0) return '0 Bytes';
+//   const k = 1024;
+//   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+//   const i = Math.floor(Math.log(bytes) / Math.log(k));
+//   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+// };
 
-const formatDate = (timestamp: number): string => {
-  return new Date(timestamp * 1000).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-};
+// const formatDate = (timestamp: number): string => {
+//   return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+//     year: 'numeric',
+//     month: 'short',
+//     day: 'numeric',
+//   });
+// };
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -74,7 +75,7 @@ export default function Home() {
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || JSON.stringify(errorData);
-        } catch (e) {
+        } catch {
           const text = await response.text();
           if (text) errorMsg = text;
         }
@@ -162,7 +163,7 @@ export default function Home() {
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || JSON.stringify(errorData);
-        } catch (e) {
+        } catch {
           const text = await response.text();
           if (text) errorMsg = text;
         }
@@ -197,7 +198,7 @@ export default function Home() {
     
     try {
       await uploadFile(file);
-    } catch (error) {
+    } catch {
       // Error handling is done in uploadFile
     }
   };
@@ -226,14 +227,14 @@ export default function Home() {
           file.name.endsWith('.txt')) {
         try {
           await uploadFile(file);
-        } catch (error) {
+        } catch {
           // Error handling is done in uploadFile
         }
       } else {
         setError('Only PDF and text files are allowed');
       }
     }
-  }, []);
+  }, [uploadFile]);
 
   const handleDeleteDocument = async (filename: string) => {
     if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
