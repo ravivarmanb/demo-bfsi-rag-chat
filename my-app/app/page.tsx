@@ -59,7 +59,7 @@ export default function Home() {
     fetchDocuments();
   }, []);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       console.log('Fetching documents from:', `${API_BASE_URL}/documents`);
       const response = await fetch(`${API_BASE_URL}/documents`, {
@@ -87,10 +87,10 @@ export default function Home() {
       setDocuments(data.documents || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
-      setError(error.message || 'Failed to load documents');
+      setError(error instanceof Error ? error.message : 'Failed to load documents');
       setDocuments([]); // Clear documents on error
     }
-  };
+  }, []);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,7 +134,7 @@ export default function Home() {
     }
   };
 
-  const uploadFile = async (file: File) => {
+  const uploadFile = useCallback(async (file: File) => {
     if (!file) return;
 
     console.log(`Starting upload of ${file.name} (${file.size} bytes)`);
@@ -182,7 +182,7 @@ export default function Home() {
     } catch (error) {
       console.error('Upload error:', error);
       setUploadStatus('error');
-      const errorMsg = error.message || 'Failed to upload document. Please check the console for details.';
+      const errorMsg = error instanceof Error ? error.message : 'Failed to upload document. Please check the console for details.';
       setError(errorMsg);
       throw error;
     } finally {
@@ -190,7 +190,7 @@ export default function Home() {
         fileInputRef.current.value = '';
       }
     }
-  };
+  }, [fetchDocuments]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -252,7 +252,7 @@ export default function Home() {
       await fetchDocuments();
     } catch (error) {
       console.error('Error deleting document:', error);
-      setError(error.message || 'Failed to delete document');
+      setError(error instanceof Error ? error.message : 'Failed to delete document');
     }
   };
 
