@@ -57,7 +57,7 @@ export default function Home() {
   // Fetch documents on component mount
   useEffect(() => {
     fetchDocuments();
-  }, []);
+  }, [fetchDocuments]);
 
   const fetchDocuments = useCallback(async () => {
     try {
