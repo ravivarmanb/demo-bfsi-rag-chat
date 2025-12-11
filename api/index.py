@@ -19,12 +19,16 @@ app.add_middleware(
 # Initialize Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY environment variable is required")
-
-genai.configure(api_key=GEMINI_API_KEY)
-
-# Initialize Gemini model
-model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    print("WARNING: GEMINI_API_KEY not found in environment variables")
+    model = None
+else:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        print("Gemini model initialized successfully")
+    except Exception as e:
+        print(f"Error initializing Gemini: {str(e)}")
+        model = None
 
 # In-memory storage for documents (will reset on cold starts)
 documents_store = {}
@@ -83,6 +87,9 @@ def get_response_from_local_knowledge(query: str) -> Optional[str]:
         If the answer isn't in the context, just say "NO_ANSWER".
         Answer:"""
         
+        if not model:
+            return None
+            
         response = model.generate_content(prompt)
         if "NO_ANSWER" in response.text.strip():
             return None
@@ -94,6 +101,9 @@ def get_response_from_local_knowledge(query: str) -> Optional[str]:
 
 def get_general_knowledge_response(query: str) -> str:
     """Get response using Gemini's general knowledge."""
+    if not model:
+        return "Gemini API is not properly configured. Please check the GEMINI_API_KEY environment variable."
+    
     try:
         response = model.generate_content(query)
         return response.text
@@ -223,8 +233,10 @@ async def health_check():
     return {
         "status": "healthy",
         "documents_count": len(documents_store),
-        "gemini_configured": bool(GEMINI_API_KEY),
-        "version": "simple"
+        "gemini_api_key_set": bool(GEMINI_API_KEY),
+        "gemini_model_initialized": bool(model),
+        "version": "simple",
+        "environment_vars": list(os.environ.keys()) if os.getenv("DEBUG") else "hidden"
     }
 
 # Export the app for Vercel
