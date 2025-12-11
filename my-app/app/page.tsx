@@ -54,11 +54,6 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  // Fetch documents on component mount
-  useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
-
   const fetchDocuments = useCallback(async () => {
     try {
       console.log('Fetching documents from:', `${API_BASE_URL}/documents`);
@@ -91,6 +86,11 @@ export default function Home() {
       setDocuments([]); // Clear documents on error
     }
   }, []);
+
+  // Fetch documents on component mount
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
