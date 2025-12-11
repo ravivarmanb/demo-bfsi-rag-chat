@@ -1,4 +1,5 @@
 import os
+import sys
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -112,17 +113,25 @@ def get_general_knowledge_response(query: str) -> str:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_request: ChatRequest):
-    query = chat_request.message
+    try:
+        query = chat_request.message
+        
+        # First try to get response from local knowledge
+        local_response = get_response_from_local_knowledge(query)
+        
+        if local_response:
+            return ChatResponse(response=local_response, source="local_knowledge")
+        
+        # If no relevant local knowledge, use general knowledge
+        general_response = get_general_knowledge_response(query)
+        return ChatResponse(response=general_response, source="general_knowledge")
     
-    # First try to get response from local knowledge
-    local_response = get_response_from_local_knowledge(query)
-    
-    if local_response:
-        return ChatResponse(response=local_response, source="local_knowledge")
-    
-    # If no relevant local knowledge, use general knowledge
-    general_response = get_general_knowledge_response(query)
-    return ChatResponse(response=general_response, source="general_knowledge")
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat error: {str(e)}"
+        )
 
 @app.post("/upload_document")
 async def upload_document(
@@ -184,29 +193,37 @@ async def upload_document(
 @app.get("/documents")
 async def list_documents():
     """List all documents in the in-memory knowledge base."""
-    global documents_store
-    
-    documents = []
-    total_size = 0
-    
-    for filename, content in documents_store.items():
-        size = len(content.encode('utf-8'))
-        file_ext = filename.split('.')[-1] if '.' in filename else 'txt'
+    try:
+        global documents_store
         
-        documents.append({
-            "filename": filename,
-            "size": size,
-            "type": file_ext,
-            "content_preview": content[:100] + "..." if len(content) > 100 else content
-        })
+        documents = []
+        total_size = 0
         
-        total_size += size
+        for filename, content in documents_store.items():
+            size = len(content.encode('utf-8'))
+            file_ext = filename.split('.')[-1] if '.' in filename else 'txt'
+            
+            documents.append({
+                "filename": filename,
+                "size": size,
+                "type": file_ext,
+                "content_preview": content[:100] + "..." if len(content) > 100 else content
+            })
+            
+            total_size += size
+        
+        return {
+            "documents": documents,
+            "total_size": total_size,
+            "total_documents": len(documents)
+        }
     
-    return {
-        "documents": documents,
-        "total_size": total_size,
-        "total_documents": len(documents)
-    }
+    except Exception as e:
+        print(f"Error in list_documents: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Documents list error: {str(e)}"
+        )
 
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str):
@@ -227,17 +244,30 @@ async def delete_document(filename: str):
         "filename": filename
     }
 
+@app.get("/")
+async def root():
+    """Root endpoint for basic connectivity test."""
+    return {"message": "RAG Chat API is running", "status": "ok"}
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "documents_count": len(documents_store),
-        "gemini_api_key_set": bool(GEMINI_API_KEY),
-        "gemini_model_initialized": bool(model),
-        "version": "simple",
-        "environment_vars": list(os.environ.keys()) if os.getenv("DEBUG") else "hidden"
-    }
+    try:
+        return {
+            "status": "healthy",
+            "documents_count": len(documents_store),
+            "gemini_api_key_set": bool(GEMINI_API_KEY),
+            "gemini_model_initialized": bool(model),
+            "version": "simple",
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+            "environment_vars": list(os.environ.keys()) if os.getenv("DEBUG") else "hidden"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "gemini_api_key_set": bool(GEMINI_API_KEY) if 'GEMINI_API_KEY' in locals() else False
+        }
 
 # Export the app for Vercel
 handler = app
