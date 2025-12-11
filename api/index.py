@@ -4,7 +4,6 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import google.generativeai as genai
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 app = FastAPI()
 
@@ -24,8 +23,8 @@ if not GEMINI_API_KEY:
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize models globally (cached across requests)
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp", temperature=0.7, google_api_key=GEMINI_API_KEY)
+# Initialize Gemini model
+model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
 # In-memory storage for documents (will reset on cold starts)
 documents_store = {}
@@ -84,10 +83,10 @@ def get_response_from_local_knowledge(query: str) -> Optional[str]:
         If the answer isn't in the context, just say "NO_ANSWER".
         Answer:"""
         
-        response = llm.invoke(prompt)
-        if "NO_ANSWER" in response.content.strip():
+        response = model.generate_content(prompt)
+        if "NO_ANSWER" in response.text.strip():
             return None
-        return response.content
+        return response.text
         
     except Exception as e:
         print(f"Error in get_response_from_local_knowledge: {str(e)}")
@@ -96,8 +95,8 @@ def get_response_from_local_knowledge(query: str) -> Optional[str]:
 def get_general_knowledge_response(query: str) -> str:
     """Get response using Gemini's general knowledge."""
     try:
-        response = llm.invoke(query)
-        return response.content
+        response = model.generate_content(query)
+        return response.text
     except Exception as e:
         return f"I'm sorry, I encountered an error: {str(e)}"
 
