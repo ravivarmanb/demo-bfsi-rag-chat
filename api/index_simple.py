@@ -4,7 +4,6 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import google.generativeai as genai
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 app = FastAPI()
 
@@ -20,12 +19,16 @@ app.add_middleware(
 # Initialize Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY environment variable is required")
-
-genai.configure(api_key=GEMINI_API_KEY)
-
-# Initialize models globally (cached across requests)
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp", temperature=0.7, google_api_key=GEMINI_API_KEY)
+    print("WARNING: GEMINI_API_KEY not found in environment variables")
+    model = None
+else:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        print("Gemini model initialized successfully")
+    except Exception as e:
+        print(f"Error initializing Gemini: {str(e)}")
+        model = None
 
 # In-memory storage for documents (will reset on cold starts)
 documents_store = {}
@@ -84,10 +87,13 @@ def get_response_from_local_knowledge(query: str) -> Optional[str]:
         If the answer isn't in the context, just say "NO_ANSWER".
         Answer:"""
         
-        response = llm.invoke(prompt)
-        if "NO_ANSWER" in response.content.strip():
+        if not model:
             return None
-        return response.content
+            
+        response = model.generate_content(prompt)
+        if "NO_ANSWER" in response.text.strip():
+            return None
+        return response.text
         
     except Exception as e:
         print(f"Error in get_response_from_local_knowledge: {str(e)}")
@@ -95,25 +101,36 @@ def get_response_from_local_knowledge(query: str) -> Optional[str]:
 
 def get_general_knowledge_response(query: str) -> str:
     """Get response using Gemini's general knowledge."""
+    if not model:
+        return "Gemini API is not properly configured. Please check the GEMINI_API_KEY environment variable."
+    
     try:
-        response = llm.invoke(query)
-        return response.content
+        response = model.generate_content(query)
+        return response.text
     except Exception as e:
         return f"I'm sorry, I encountered an error: {str(e)}"
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_request: ChatRequest):
-    query = chat_request.message
+    try:
+        query = chat_request.message
+        
+        # First try to get response from local knowledge
+        local_response = get_response_from_local_knowledge(query)
+        
+        if local_response:
+            return ChatResponse(response=local_response, source="local_knowledge")
+        
+        # If no relevant local knowledge, use general knowledge
+        general_response = get_general_knowledge_response(query)
+        return ChatResponse(response=general_response, source="general_knowledge")
     
-    # First try to get response from local knowledge
-    local_response = get_response_from_local_knowledge(query)
-    
-    if local_response:
-        return ChatResponse(response=local_response, source="local_knowledge")
-    
-    # If no relevant local knowledge, use general knowledge
-    general_response = get_general_knowledge_response(query)
-    return ChatResponse(response=general_response, source="general_knowledge")
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat error: {str(e)}"
+        )
 
 @app.post("/upload_document")
 async def upload_document(
@@ -175,29 +192,37 @@ async def upload_document(
 @app.get("/documents")
 async def list_documents():
     """List all documents in the in-memory knowledge base."""
-    global documents_store
-    
-    documents = []
-    total_size = 0
-    
-    for filename, content in documents_store.items():
-        size = len(content.encode('utf-8'))
-        file_ext = filename.split('.')[-1] if '.' in filename else 'txt'
+    try:
+        global documents_store
         
-        documents.append({
-            "filename": filename,
-            "size": size,
-            "type": file_ext,
-            "content_preview": content[:100] + "..." if len(content) > 100 else content
-        })
+        documents = []
+        total_size = 0
         
-        total_size += size
+        for filename, content in documents_store.items():
+            size = len(content.encode('utf-8'))
+            file_ext = filename.split('.')[-1] if '.' in filename else 'txt'
+            
+            documents.append({
+                "filename": filename,
+                "size": size,
+                "type": file_ext,
+                "content_preview": content[:100] + "..." if len(content) > 100 else content
+            })
+            
+            total_size += size
+        
+        return {
+            "documents": documents,
+            "total_size": total_size,
+            "total_documents": len(documents)
+        }
     
-    return {
-        "documents": documents,
-        "total_size": total_size,
-        "total_documents": len(documents)
-    }
+    except Exception as e:
+        print(f"Error in list_documents: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Documents list error: {str(e)}"
+        )
 
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str):
@@ -218,15 +243,28 @@ async def delete_document(filename: str):
         "filename": filename
     }
 
+@app.get("/")
+async def root():
+    """Root endpoint for basic connectivity test."""
+    return {"message": "RAG Chat API is running", "status": "ok"}
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "documents_count": len(documents_store),
-        "gemini_configured": bool(GEMINI_API_KEY),
-        "version": "simple"
-    }
+    try:
+        return {
+            "status": "healthy",
+            "documents_count": len(documents_store),
+            "gemini_api_key_set": bool(GEMINI_API_KEY),
+            "gemini_model_initialized": bool(model),
+            "version": "simple"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "gemini_api_key_set": bool(GEMINI_API_KEY) if 'GEMINI_API_KEY' in locals() else False
+        }
 
 # Export the app for Vercel
 handler = app
